@@ -10,6 +10,8 @@ struct Chat: Codable, Identifiable, Hashable {
     let id: String
     let network: Network
     var name: String
+    /// "+<digits>" for people, used to find their name in the iPhone's contacts.
+    let phone: String?
     let isGroup: Bool
     var unread: Int
     var lastTs: Double
@@ -33,9 +35,32 @@ struct Message: Codable, Identifiable, Hashable {
     let text: String
     let ts: Double
     let media: String?
+    var reactions: [Reaction]?
+    var poll: Poll?
 
     var date: Date { Date(timeIntervalSince1970: ts / 1000) }
     var isImage: Bool { media?.hasPrefix("image/") == true }
+    var summary: String {
+        if !text.isEmpty { return text }
+        if let poll { return "📊 " + poll.question }
+        return isImage ? "📷 Photo" : ""
+    }
+}
+
+struct Reaction: Codable, Hashable {
+    let emoji: String
+    let fromMe: Bool
+}
+
+struct Poll: Codable, Hashable {
+    struct Option: Codable, Hashable {
+        let name: String
+        let votes: Int
+        let mine: Bool
+    }
+    let question: String
+    let multi: Bool
+    let options: [Option]
 }
 
 struct BridgeStatus: Codable {
@@ -45,7 +70,7 @@ struct BridgeStatus: Codable {
     var signal: Signal
 }
 
-/// Pushed by the bridge over the WebSocket: "message", "chat", "status" or "reload".
+/// Pushed by the bridge over the WebSocket: "message", "update" (reactions, votes), "chat", "status" or "reload".
 struct BridgeEvent: Decodable {
     let type: String
     let chat: Chat?

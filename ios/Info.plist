@@ -8,6 +8,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSContactsUsageDescription</key>
+	<string>Shows the names from your contacts instead of phone numbers.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Convo connects to your self-hosted message bridge on your network.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

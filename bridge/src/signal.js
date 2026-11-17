@@ -71,12 +71,19 @@ async function handle(data) {
     address = groups.get(groupId)?.id
   }
   if (!address) return
+  const id = 'sg:' + address
+
+  // A reaction points at its message by the message's sent time.
+  if (dm.reaction) {
+    const target = store.messageAt(id, dm.reaction.targetSentTimestamp)
+    if (target) store.react(target.id, sent ? store.ME : sender, dm.reaction.isRemove ? '' : dm.reaction.emoji)
+    return
+  }
 
   const image = (dm.attachments || []).find(a => a.contentType?.startsWith('image/'))
   const text = dm.message || (dm.attachments?.length && !image ? '📎 Attachment' : '')
-  if (!text && !image) return // reactions, receipts, typing…
+  if (!text && !image) return // receipts, typing…
 
-  const id = 'sg:' + address
   store.ensureChat(id, 'signal', {
     isGroup: !!groupId, name: groupId ? groups.get(groupId).name : sent ? null : env.sourceName,
   })
@@ -103,8 +110,9 @@ function requireLinked() {
   if (!account) throw store.httpError(503, 'Signal is not linked yet')
 }
 
-export async function send(chat, { text, image }) {
+export async function send(chat, { text, image, poll }) {
   requireLinked()
+  if (poll) throw store.httpError(501, 'Polls are only supported for WhatsApp')
   const body = { number: account, recipients: [chat.id.slice(3)], message: text || '' }
   if (image) body.base64_attachments = [`data:image/jpeg;filename=photo.jpg;base64,${image.toString('base64')}`]
   const res = await fetch(`${API}/v2/send`, {
@@ -120,6 +128,27 @@ export async function send(chat, { text, image }) {
     message.media = 'image/jpeg'
   }
   return store.addMessage(message) ?? store.getMessage(message.id)
+}
+
+// Message ids end in "/<sent time>/<author>", which is how Signal names the message to react to.
+export async function react(chat, message, emoji) {
+  requireLinked()
+  const [ts, author] = message.id.split('/').slice(-2)
+  const res = await fetch(`${API}/v1/reactions/${enc(account)}`, {
+    method: emoji ? 'POST' : 'DELETE', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ recipient: chat.id.slice(3), reaction: emoji || mine(message), target_author: author, timestamp: Number(ts) }),
+  })
+  if (!res.ok) throw store.httpError(502, (await res.json().catch(() => ({}))).error || `Signal reaction failed (HTTP ${res.status})`)
+  return store.react(message.id, store.ME, emoji)
+}
+const mine = message => message.reactions.find(r => r.fromMe)?.emoji || ''
+
+export async function vote() {
+  throw store.httpError(501, 'Polls are only supported for WhatsApp')
+}
+
+export async function fetchMedia() {
+  return false
 }
 
 export async function startChat(phone) {

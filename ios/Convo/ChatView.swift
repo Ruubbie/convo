@@ -8,6 +8,8 @@ struct ChatView: View {
     @State private var text = ""
     @State private var sending = false
     @State private var photo: PhotosPickerItem?
+    @State private var choosingPhoto = false
+    @State private var makingPoll = false
 
     private var chat: Chat? { model.chats.first { $0.id == chatId } }
     private var messages: [Message] { model.messages[chatId] ?? [] }
@@ -71,13 +73,21 @@ struct ChatView: View {
         .onChange(of: photo) { _, item in
             if let item { Task { await sendPhoto(item) } }
         }
+        .photosPicker(isPresented: $choosingPhoto, selection: $photo, matching: .images)
+        .sheet(isPresented: $makingPoll) { NewPollSheet(chatId: chatId) }
     }
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            PhotosPicker(selection: $photo, matching: .images) { RoundIcon(systemName: "plus", size: 50) }
-                .accessibilityLabel("Send a photo")
-                .disabled(sending)
+            Menu {
+                Button("Photo", systemImage: "photo") { choosingPhoto = true }
+                // signal-cli's REST API has no polls yet, so they're WhatsApp only.
+                if chat?.network == .whatsapp { Button("Poll", systemImage: "chart.bar.xaxis") { makingPoll = true } }
+            } label: {
+                RoundIcon(systemName: "plus", size: 50)
+            }
+            .accessibilityLabel("Send a photo or poll")
+            .disabled(sending)
             TextField("Type a message...", text: $text, axis: .vertical)
                 .lineLimit(1...5)
                 .padding(.horizontal, 20).padding(.vertical, 14)
@@ -114,70 +124,5 @@ struct ChatView: View {
         sending = true
         if await model.send(text.trimmed, image: jpeg, to: chatId) { text = "" }
         sending = false
-    }
-}
-
-struct MessageRow: View {
-    let message: Message
-    let chat: Chat
-    let firstOfRun: Bool
-
-    private var time: String { When.time(message.date) }
-
-    var body: some View {
-        if message.fromMe {
-            HStack {
-                Spacer(minLength: 60)
-                bubble
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                if chat.isGroup && firstOfRun && !message.sender.isEmpty {
-                    Text(message.sender).font(.system(size: 13.5)).foregroundStyle(Color.muted).padding(.leading, 46).padding(.top, 6)
-                }
-                HStack(alignment: .bottom, spacing: 10) {
-                    Group {
-                        if chat.isGroup { Initials(name: message.sender, size: 36) } else { Avatar(chat: chat, size: 36, badge: false) }
-                    }
-                    .opacity(firstOfRun ? 1 : 0)
-                    bubble
-                    if !message.isImage {
-                        Text(time).font(.system(size: 12)).foregroundStyle(Color.muted).monospacedDigit().padding(.bottom, 12)
-                    }
-                    Spacer(minLength: 30)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private var bubble: some View {
-        if message.isImage {
-            VStack(alignment: message.fromMe ? .trailing : .leading, spacing: 6) {
-                RemoteImage(path: "/api/media/\(Bridge.escape(message.id))")
-                    .frame(width: 250, height: 170)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .overlay(alignment: .bottomTrailing) {
-                        Text(time).font(.system(size: 13)).foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.5), radius: 3).padding(.horizontal, 14).padding(.vertical, 10)
-                    }
-                if !message.text.isEmpty { textBubble }
-            }
-        } else if message.text.isEmojiOnly {
-            Text(message.text).font(.system(size: 40))
-        } else {
-            textBubble
-        }
-    }
-
-    private var textBubble: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 12) {
-            Text(message.text).font(.system(size: 16.5)).textSelection(.enabled)
-            if message.fromMe && !message.isImage {
-                Text(time).font(.system(size: 12)).opacity(0.75).monospacedDigit()
-            }
-        }
-        .padding(.horizontal, 18).padding(.vertical, 13)
-        .foregroundStyle(message.fromMe ? Color.mineText : Color.ink)
-        .background(message.fromMe ? Color.mine : Color.soft, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }

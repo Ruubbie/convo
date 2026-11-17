@@ -22,6 +22,8 @@ final class AppModel {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private let images = NSCache<NSString, UIImage>()
     @ObservationIgnored private var missingImages: Set<String> = []
+    /// Phone number key → name, from the iPhone's contacts (see AddressBook).
+    @ObservationIgnored private var contactNames: [String: String] = [:]
 
     private let pageSize = 60
 
@@ -83,9 +85,10 @@ final class AppModel {
     }
 
     private func handle(_ event: BridgeEvent) {
+        let chat = event.chat.map(named)
         switch event.type {
         case "message":
-            guard let chat = event.chat, let message = event.message else { return }
+            guard let chat, let message = event.message else { return }
             upsert(chat)
             if messages[chat.id] != nil, !messages[chat.id]!.contains(where: { $0.id == message.id }) {
                 messages[chat.id]!.append(message)
@@ -96,8 +99,10 @@ final class AppModel {
             } else if !message.fromMe {
                 toast = Toast(chat: chat, message: message)
             }
+        case "update":
+            if let message = event.message { replace(message) }
         case "chat":
-            if let chat = event.chat { upsert(chat) }
+            if let chat { upsert(chat) }
         case "status":
             status = event.status
         case "reload":
@@ -108,6 +113,7 @@ final class AppModel {
     }
 
     private func upsert(_ chat: Chat) {
+        let chat = named(chat)
         if let i = chats.firstIndex(where: { $0.id == chat.id }) { chats[i] = chat } else { chats.append(chat) }
         chats.sort { $0.lastTs > $1.lastTs }
     }
@@ -117,13 +123,28 @@ final class AppModel {
         do {
             let newChats: [Chat] = try await bridge.call("/api/chats")
             let newStatus: BridgeStatus = try await bridge.call("/api/status")
-            chats = newChats
+            chats = newChats.map(named)
             status = newStatus
             connectionProblem = nil
             if let open = openChatId { await loadMessages(open) }
         } catch {
             connectionProblem = error.localizedDescription
         }
+    }
+
+    // MARK: Contacts
+
+    func loadContacts() async {
+        contactNames = await AddressBook.load()
+        chats = chats.map(named)
+    }
+
+    /// People show with the name from the iPhone's contacts when they're in there.
+    private func named(_ chat: Chat) -> Chat {
+        guard !chat.isGroup, let key = chat.phone.flatMap(AddressBook.key), let name = contactNames[key] else { return chat }
+        var chat = chat
+        chat.name = name
+        return chat
     }
 
     // MARK: Chats
@@ -149,9 +170,17 @@ final class AppModel {
     }
 
     func send(_ text: String, image: Data? = nil, to chatId: String) async -> Bool {
-        guard let bridge else { return false }
         var body: [String: Any] = ["text": text]
         if let image { body["image"] = image.base64EncodedString() }
+        return await post(body, to: chatId)
+    }
+
+    func sendPoll(question: String, options: [String], multi: Bool, to chatId: String) async -> Bool {
+        await post(["poll": ["question": question, "options": options, "multi": multi]], to: chatId)
+    }
+
+    private func post(_ body: [String: Any], to chatId: String) async -> Bool {
+        guard let bridge else { return false }
         do {
             let message: Message = try await bridge.call("/api/chats/\(Bridge.escape(chatId))/messages", method: "POST", body: body)
             if messages[chatId]?.contains(where: { $0.id == message.id }) == false {
@@ -162,6 +191,30 @@ final class AppModel {
             lastError = error.localizedDescription
             return false
         }
+    }
+
+    /// An empty emoji removes my reaction.
+    func react(_ emoji: String, to message: Message) async {
+        await update(message, "react", ["emoji": emoji])
+    }
+
+    /// All the options I picked; none takes my vote back.
+    func vote(_ options: [String], on message: Message) async {
+        await update(message, "vote", ["options": options])
+    }
+
+    private func update(_ message: Message, _ action: String, _ body: [String: Any]) async {
+        guard let bridge else { return }
+        do {
+            let updated: Message = try await bridge.call("/api/messages/\(Bridge.escape(message.id))/\(action)", method: "POST", body: body)
+            replace(updated)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    private func replace(_ message: Message) {
+        if let i = messages[message.chatId]?.firstIndex(where: { $0.id == message.id }) { messages[message.chatId]![i] = message }
     }
 
     func startChat(network: Network, phone: String) async throws -> Chat {

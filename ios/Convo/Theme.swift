@@ -118,17 +118,77 @@ struct Initials: View {
     }
 }
 
-struct RemoteImage: View {
+/// A photo in a chat: 250 pt wide and as tall as its shape needs, within limits.
+struct PhotoThumbnail: View {
     @Environment(AppModel.self) private var model
     let path: String
     @State private var image: UIImage?
+    @State private var failed = false
+
+    private var height: CGFloat {
+        guard let image, image.size.width > 0 else { return 170 }
+        return min(max(250 * image.size.height / image.size.width, 140), 330)
+    }
 
     var body: some View {
         ZStack {
             Color.soft
-            if let image { Image(uiImage: image).resizable().scaledToFill() } else { ProgressView() }
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if failed {
+                Image(systemName: "photo").font(.system(size: 28)).foregroundStyle(Color.muted)
+            } else {
+                ProgressView()
+            }
         }
-        .task(id: path) { image = await model.image(path) }
+        .frame(width: 250, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .task(id: path) {
+            image = await model.image(path)
+            failed = image == nil
+        }
+    }
+}
+
+/// Full-screen photo: pinch to zoom, share or save it, close with the button.
+struct PhotoViewer: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let path: String
+    @State private var image: UIImage?
+    @State private var zoom: CGFloat = 1
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let image {
+                Image(uiImage: image).resizable().scaledToFit()
+                    .scaleEffect(zoom)
+                    .gesture(MagnifyGesture()
+                        .onChanged { zoom = max(1, $0.magnification) }
+                        .onEnded { _ in withAnimation(.spring(duration: 0.3)) { zoom = 1 } })
+            } else {
+                ProgressView().tint(.white)
+            }
+        }
+        .overlay(alignment: .top) {
+            HStack {
+                Button { dismiss() } label: { overlayIcon("xmark") }.accessibilityLabel("Close")
+                Spacer()
+                if let image {
+                    let photo = Image(uiImage: image)
+                    ShareLink(item: photo, preview: SharePreview("Photo", image: photo)) { overlayIcon("square.and.arrow.up") }
+                        .accessibilityLabel("Share")
+                }
+            }
+            .padding(16)
+        }
+        .task { image = await model.image(path) }
+    }
+
+    private func overlayIcon(_ name: String) -> some View {
+        Image(systemName: name).font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+            .frame(width: 44, height: 44).background(.white.opacity(0.18), in: Circle())
     }
 }
 

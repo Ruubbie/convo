@@ -57,7 +57,21 @@ async function route(req, res) {
   }
   if (is('GET', 'media') && b) {
     const msg = store.getMessage(b)
+    if (msg?.media && !fs.existsSync(store.mediaPath(b))) {
+      await networks[store.getChat(msg.chatId).network].fetchMedia(msg).catch(e => console.warn('media download:', e.message))
+    }
     return msg?.media && fs.existsSync(store.mediaPath(b)) ? file(res, store.mediaPath(b), msg.media) : json(res, 404, { error: 'No media' })
+  }
+  if (a === 'messages' && b && req.method === 'POST') {
+    const msg = store.getMessage(b)
+    if (!msg) return json(res, 404, { error: 'Not found' })
+    const chat = store.getChat(msg.chatId)
+    const body = await readBody(req)
+    if (is('POST', 'messages', b, 'react')) return json(res, 200, await networks[chat.network].react(chat, msg, body.emoji || ''))
+    if (is('POST', 'messages', b, 'vote')) {
+      if (!msg.poll) throw store.httpError(400, 'That message is not a poll')
+      return json(res, 200, await networks[chat.network].vote(chat, msg, Array.isArray(body.options) ? body.options : []))
+    }
   }
   if (is('GET', 'chats') && !b) return json(res, 200, store.listChats())
   if (is('POST', 'chats') && !b) {
@@ -73,7 +87,14 @@ async function route(req, res) {
     return json(res, 200, store.listMessages(chat.id, before))
   }
   if (is('POST', 'chats', b, 'messages')) {
-    const { text = '', image } = await readBody(req)
+    const { text = '', image, poll } = await readBody(req)
+    if (poll) {
+      const options = (poll.options || []).map(o => String(o).trim()).filter(Boolean)
+      if (!String(poll.question || '').trim() || options.length < 2) throw store.httpError(400, 'A poll needs a question and at least two options')
+      if (new Set(options).size !== options.length) throw store.httpError(400, 'Poll options must be different')
+      const message = await networks[chat.network].send(chat, { poll: { question: poll.question.trim(), options, multi: !!poll.multi } })
+      return json(res, 200, message)
+    }
     if (!text.trim() && !image) throw store.httpError(400, 'Send text or an image')
     const message = await networks[chat.network].send(chat, { text: text.trim(), image: image && Buffer.from(image, 'base64') })
     return json(res, 200, message)
@@ -97,7 +118,7 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
-// Live events for the app: message, chat, status, reload.
+// Live events for the app: message, update (reactions, votes), chat, status, reload.
 const wss = new WebSocketServer({ noServer: true })
 server.on('upgrade', (req, socket, head) => {
   if (new URL(req.url, 'http://bridge').pathname !== '/api/events' || !authorized(req)) return socket.destroy()
@@ -112,6 +133,7 @@ const broadcast = event => {
   for (const ws of wss.clients) if (ws.readyState === 1) ws.send(data)
 }
 store.bus.on('message', ({ chat, message }) => broadcast({ type: 'message', chat, message }))
+store.bus.on('update', ({ chat, message }) => broadcast({ type: 'update', chat, message }))
 store.bus.on('chat', chat => broadcast({ type: 'chat', chat }))
 store.bus.on('status', () => broadcast({ type: 'status', status: status() }))
 store.bus.on('reload', () => broadcast({ type: 'reload' }))

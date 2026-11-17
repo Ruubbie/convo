@@ -12,7 +12,10 @@ struct ConvoApp: App {
                 .onChange(of: phase) { _, phase in
                     // iOS suspends the WebSocket in the background; catch up when we come back.
                     if phase == .background { model.disconnect() }
-                    if phase == .active { model.connectIfNeeded() }
+                    if phase == .active {
+                        model.connectIfNeeded()
+                        Task { await model.loadContacts() }
+                    }
                 }
         }
     }
@@ -59,6 +62,7 @@ struct RootView: View {
             if args.object(forKey: "tab") != nil { tab = args.integer(forKey: "tab") }
             if let open = args.string(forKey: "open") { model.messagesPath = [open] }
             model.connectIfNeeded()
+            await model.loadContacts()
         }
     }
 }
@@ -74,7 +78,7 @@ struct ToastView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(toast.chat.isGroup ? "\(toast.message.sender) · \(toast.chat.name)" : toast.chat.name)
                         .font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                    Text(toast.message.text.isEmpty ? "📷 Photo" : toast.message.text)
+                    Text(toast.message.summary)
                         .font(.system(size: 14)).foregroundStyle(Color.muted).lineLimit(1)
                 }
                 Spacer(minLength: 0)

@@ -82,7 +82,11 @@ New messages show up live. Pull down on the inbox to refresh, and use **+** to s
 ## What works
 
 - One inbox with WhatsApp and Signal chats (direct and groups), newest first, with unread counts and search
-- Sending and receiving text and photos; voice notes, videos, stickers and files show as a short label
+- Sending and receiving text and photos (tap a photo to view it full screen, pinch to zoom, share or save it); voice
+  notes, videos, stickers and files show as a short label
+- Reactions: long-press a message to react, both networks
+- WhatsApp polls: see live results, vote, and create a poll with **+** → Poll
+- Names from your iPhone's contacts (matched by phone number), falling back to the name people set themselves
 - Contacts tab (A–Z), WhatsApp profile pictures, group sender names, in-app banners for new messages
 - Light and dark mode
 
@@ -90,7 +94,9 @@ New messages show up live. Pull down on the inbox to refresh, and use **+** to s
 
 - **Push notifications when the app is closed.** These need an Apple Developer account and APNs on the bridge. For now
   the app catches up whenever you open it.
-- Calls, reactions, replies, edits, typing indicators, read receipts back to the sender, and voice/video playback.
+- Calls, replies, edits, typing indicators, read receipts back to the sender, and voice/video playback.
+- Signal polls (signal-cli's REST API doesn't offer them yet).
+- Reacting to or voting on messages that arrived before reactions and polls were added to the bridge.
 
 ## Bridge API
 
@@ -106,9 +112,12 @@ Every request needs the header `Authorization: Bearer <BRIDGE_TOKEN>`.
 | `POST /api/chats` `{network, phone}` | Start a chat |
 | `GET /api/chats/:id/messages?before=<ms>` | Last 60 messages, before a timestamp if given |
 | `POST /api/chats/:id/messages` `{text, image?}` | Send (`image` is base64 JPEG) |
+| `POST /api/chats/:id/messages` `{poll: {question, options, multi}}` | Send a poll (WhatsApp) |
+| `POST /api/messages/:id/react` `{emoji}` | React; an empty `emoji` removes your reaction |
+| `POST /api/messages/:id/vote` `{options}` | Vote with the option names you pick; `[]` takes your vote back |
 | `POST /api/chats/:id/read` | Mark as read |
-| `GET /api/chats/:id/avatar`, `GET /api/media/:messageId` | Images |
-| `WS /api/events` | Live events: `message`, `chat`, `status`, `reload` |
+| `GET /api/chats/:id/avatar`, `GET /api/media/:messageId` | Images (older WhatsApp photos are downloaded on first request) |
+| `WS /api/events` | Live events: `message`, `update` (reactions, votes), `chat`, `status`, `reload` |
 
 Ids are URL-encoded as one path segment.
 
