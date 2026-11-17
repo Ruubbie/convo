@@ -1,0 +1,79 @@
+# Builds the iPhone app for the simulator and takes screenshots against a bridge seeded with demo chats.
+name: iOS build and screenshots
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      TOKEN: ci-demo-token-0123456789
+      BUNDLE: com.example.convo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Start a demo bridge
+        working-directory: bridge
+        run: |
+          npm ci
+          export DATA_DIR="$RUNNER_TEMP/convo-data"
+          node demo/seed.js
+          BRIDGE_TOKEN=$TOKEN SIGNAL_API=http://127.0.0.1:9 PORT=8080 nohup node src/server.js > "$RUNNER_TEMP/bridge.log" 2>&1 &
+          sleep 3
+          curl -sf http://127.0.0.1:8080/health
+
+      - name: Build the app
+        run: |
+          xcodebuild -version
+          xcodebuild -project ios/Convo.xcodeproj -target Convo -configuration Debug -sdk iphonesimulator \
+            SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO build | tail -n 40
+          test -d build/Debug-iphonesimulator/Convo.app
+
+      - name: Boot a simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = [d for runtime, ds in json.load(sys.stdin)["devices"].items() if "iOS" in runtime for d in ds]
+          pro = [d for d in devices if d["name"].endswith("Pro")] or [d for d in devices if d["name"].startswith("iPhone")]
+          print(pro[-1]["udid"])')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+          xcrun simctl install "$UDID" build/Debug-iphonesimulator/Convo.app
+
+      - name: Take screenshots
+        run: |
+          mkdir -p screenshots
+          shot() {
+            name=$1; shift
+            xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BUNDLE" -server http://127.0.0.1:8080 -token "$TOKEN" "$@"
+            sleep 6
+            xcrun simctl io "$UDID" screenshot "screenshots/$name.png"
+          }
+          for mode in light dark; do
+            xcrun simctl ui "$UDID" appearance $mode
+            shot "$mode-1-inbox" -tab 0
+            shot "$mode-2-group-chat" -tab 0 -open "wa:120363000000000001@g.us"
+            shot "$mode-3-chat" -tab 0 -open "sg:+31600000007"
+            shot "$mode-4-contacts" -tab 1
+            shot "$mode-5-settings" -tab 2
+          done
+
+      - name: Bridge log
+        if: always()
+        run: cat "$RUNNER_TEMP/bridge.log" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots

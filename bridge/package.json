@@ -1,0 +1,18 @@
+{
+  "name": "convo-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted WhatsApp + Signal bridge with one small REST/WebSocket API for the Convo iPhone app",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "baileys": "7.0.0-rc14",
+    "pino": "^9.6.0",
+    "ws": "^8.18.0"
+  }
+}

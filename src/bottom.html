@@ -1,0 +1,256 @@
+
+/* ---------- data: one chat per person or group ---------- */
+function seed(){
+  const now = Date.now(), ago = m => now - m*60000, H = 60, D = 1440;
+  let id = 0;
+  const chat = (name, msgs, extra={}) => ({id:'c'+(++id), name, unread:0, msgs: msgs.map(([who,text,m,more]) => ({who, text, t:ago(m), ...more})), ...extra});
+  return {
+    chats:[
+      chat('The Boys',[['Tim','This is gonna be crazy 😂',5],['me','Can\'t wait!',4],['Martijn','Who\'s bringing the snacks?',3],['me','I got it covered 😌',2],['Tim','',1,{img:true, react:'🔥 2'}]],{members:['Tim','Martijn','Max'],unread:3}),
+      chat('Sophie',[['me','Thanks for tonight!',50],['them','See you later!',45]]),
+      chat('Study Group',[['Lotte','Who has the slides from Monday?',2.2*H],['Martijn','I\'ll send the notes',2.1*H]],{members:['Martijn','Lotte','Sophie'],unread:1}),
+      chat('Max',[['me','Finally fixed my bike',3*H],['them','Haha nice!',2.7*H]]),
+      chat('Lotte',[['me','Coffee at 10 tomorrow?',3.4*H],['them','Sounds good 👍',3.3*H]]),
+      chat('Family',[['Mom','Dinner at 7?',D]],{members:['Mom','Dad','Emma']}),
+      chat('Thomas',[['me','I\'ll pick you up at 8',D+60],['them','Perfect!',D+50]]),
+    ]
+  };
+}
+function load(){ try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.chats) return s; } catch(e){} return seed(); }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+
+let state = load();
+let ui = { q:'', tab:'messages', cur:null, typing:{}, pending:{} };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const last = c => c.msgs[c.msgs.length-1];
+const byId = id => state.chats.find(c => c.id === id);
+const preview = m => m.img ? '📷 Photo' : m.text;
+const isEmojiOnly = t => /^\p{Extended_Pictographic}[\p{Extended_Pictographic}‍️\s]{0,6}$/u.test(t.trim());
+const face = (name, s, cls='') => `<span class="av ${cls}"${s?` style="--s:${s}px"`:''}>${faceImg(name)}</span>`;
+const chatFace = (c, s) => c.members && !PHOTOS[c.name]
+  ? `<span class="av grp"${s?` style="--s:${s}px"`:''}>${c.members.concat(c.members).slice(0,4).map(m => faceImg(m)).join('')}</span>`
+  : face(c.name, s);
+const first = name => name.split(' ')[0];
+
+function hhmm(t){ return new Date(t).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}); }
+function dayDiff(t){ const a=new Date(t), b=new Date(); a.setHours(0,0,0,0); b.setHours(0,0,0,0); return Math.round((b-a)/864e5); }
+function when(t){
+  const d = dayDiff(t);
+  if (d === 0) return hhmm(t);
+  if (d === 1) return 'Yesterday';
+  if (d < 7) return new Date(t).toLocaleDateString('en-US', {weekday:'long'});
+  return new Date(t).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
+function dayLabel(t){
+  const d = dayDiff(t);
+  if (d === 0) return 'Today';
+  if (d === 1) return 'Yesterday';
+  return new Date(t).toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
+}
+
+/* ---------- list ---------- */
+function renderList(){
+  const q = ui.q.trim().toLowerCase();
+  const match = c => !q || c.name.toLowerCase().includes(q) || c.msgs.some(m => preview(m).toLowerCase().includes(q));
+  $('#title').textContent = ui.tab === 'contacts' ? 'Contacts' : 'Messages';
+  document.querySelectorAll('.tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === ui.tab));
+
+  if (ui.tab === 'contacts') {
+    const people = state.chats.filter(c => !c.members && match(c)).sort((a,b) => a.name.localeCompare(b.name));
+    let letter = '';
+    $('#list').innerHTML = people.length ? people.map(c => {
+      const L = c.name[0].toUpperCase(), head = L !== letter ? `<div class="letter">${letter = L}</div>` : '';
+      return `${head}<button class="row" data-open="${c.id}">${chatFace(c, 46)}<div class="mid"><span class="nm">${esc(c.name)}</span></div></button>`;
+    }).join('') : `<div class="empty">Nobody matches “${esc(ui.q)}”.</div>`;
+    return;
+  }
+
+  const rows = state.chats.filter(match).sort((a,b) => (last(b)?.t||0) - (last(a)?.t||0));
+  $('#list').innerHTML = rows.length ? rows.map(c => {
+    const m = last(c) || {who:'', text:'', t:Date.now()};
+    const prefix = m.who === 'me' ? 'You: ' : c.members && m.who ? first(m.who) + ': ' : '';
+    const txt = ui.typing[c.id] ? `<span class="txt typing">${esc(ui.typing[c.id])} is typing…</span>` : `<span class="txt">${esc(prefix + preview(m))}</span>`;
+    return `<button class="row${c.unread?' unread':''}" data-open="${c.id}">${chatFace(c)}
+      <div class="mid"><div class="top"><span class="nm">${esc(c.name)}</span><span class="time">${when(m.t)}</span></div>
+      <div class="bot">${txt}${c.unread?`<span class="badge">${c.unread}</span>`:''}</div></div></button>`;
+  }).join('') : `<div class="empty">Nothing matches “${esc(ui.q)}”.</div>`;
+}
+
+/* ---------- chat ---------- */
+function openChat(id){
+  const c = byId(id); if (!c) return;
+  ui.cur = id; c.unread = 0;
+  $('#chat').classList.add('open'); $('#chat').setAttribute('aria-hidden','false');
+  renderChat(); renderList(); save();
+  setTimeout(() => $('#msgInput').focus(), 320);
+}
+function closeChat(){
+  ui.cur = null;
+  $('#chat').classList.remove('open'); $('#chat').setAttribute('aria-hidden','true');
+  $('#msgInput').value = ''; $('#emojis').hidden = true; paintSend();
+  renderList();
+}
+function renderChat(){
+  const c = byId(ui.cur); if (!c) return;
+  $('#chatAv').innerHTML = chatFace(c, 58);
+  $('#chatName').textContent = c.name;
+  const sub = $('#chatSub');
+  sub.className = ui.typing[c.id] ? 'sub typing' : 'sub';
+  sub.textContent = ui.typing[c.id] ? `${ui.typing[c.id]} is typing…` : c.members ? `${c.members.length + 1} members ›` : 'online';
+
+  let html = '', prevDay = null;
+  c.msgs.forEach((m, i) => {
+    const dl = dayLabel(m.t);
+    if (dl !== prevDay){ if (dl !== 'Today' || prevDay) html += `<div class="day">${dl}</div>`; prevDay = dl; }
+    const mine = m.who === 'me', prev = c.msgs[i-1], next = c.msgs[i+1];
+    const side = mine ? 'me' : 'them', react = m.react ? `<span class="react ${side}">${esc(m.react)}</span>` : '';
+    const body = m.img
+      ? `<div class="pic ${side}"><img src="${SUNSET}" alt="Photo"><span class="meta">${hhmm(m.t)}</span></div>`
+      : `<div class="b ${side}${isEmojiOnly(m.text)?' big':''}">${esc(m.text)}${mine?`<span class="meta">${hhmm(m.t)}${I.ticks}</span>`:''}</div>`;
+    if (mine) { html += body + react; return; }
+    const name = c.members ? m.who : c.name;
+    const firstOfRun = !prev || prev.who !== m.who;
+    if (c.members && firstOfRun) html += `<div class="au">${esc(m.who)}</div>`;
+    html += `<div class="line">${face(name, 0, firstOfRun ? '' : 'ghost')}${body}${m.img?'':`<span class="t">${hhmm(m.t)}</span>`}</div>${react}`;
+  });
+  if (ui.typing[c.id]) html += `<div class="line">${face(c.members ? ui.typing[c.id] : c.name)}<div class="b typing-b" aria-label="typing"><i></i><i></i><i></i></div></div>`;
+  const box = $('#msgs'); box.innerHTML = html; box.scrollTop = box.scrollHeight;
+}
+function send(text, img){
+  const c = byId(ui.cur); text = text.trim();
+  if (!c || (!text && !img)) return;
+  c.msgs.push(img ? {who:'me', text:'', img:true, t:Date.now()} : {who:'me', text, t:Date.now()});
+  renderChat(); renderList(); save();
+  replyLater(c);
+}
+function replyLater(c){
+  if (ui.pending[c.id]) return; ui.pending[c.id] = true;
+  const who = c.members ? c.members[Math.floor(Math.random()*c.members.length)] : 'them';
+  setTimeout(() => {
+    ui.typing[c.id] = c.members ? who : first(c.name);
+    refresh();
+    setTimeout(() => {
+      delete ui.typing[c.id]; delete ui.pending[c.id];
+      receive(c, who, REPLIES[Math.floor(Math.random()*REPLIES.length)]);
+    }, 1200 + Math.random()*1600);
+  }, 700);
+}
+function receive(c, who, text){
+  c.msgs.push({who, text, t:Date.now()});
+  if (ui.cur !== c.id) {
+    c.unread++;
+    toast(`${chatFace(c, 42)}<div class="mid"><b>${esc(c.members ? `${who} · ${c.name}` : c.name)}</b><span>${esc(text)}</span></div>`, () => { closeSheet(); openChat(c.id); });
+  }
+  refresh(); save();
+}
+function refresh(){ renderList(); if (ui.cur) renderChat(); }
+function paintSend(){
+  const has = !!$('#msgInput').value.trim();
+  $('#sendBtn').innerHTML = has ? I.send : I.mic;
+    $('#sendBtn').setAttribute('aria-label', has ? 'Send' : 'Voice message');
+}
+
+/* ---------- toast, call, sheets ---------- */
+let toastTimer;
+function toast(html, onclick){
+  $('#overlay .toast')?.remove();
+  const el = document.createElement('button');
+  el.className = 'toast'; el.innerHTML = html;
+  el.onclick = () => { el.remove(); onclick && onclick(); };
+  $('#overlay').appendChild(el);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.remove(), 4500);
+}
+function startCall(video){
+  const c = byId(ui.cur); if (!c) return;
+  const el = document.createElement('div');
+  el.className = 'call'; el.id = 'call';
+  el.innerHTML = `${chatFace(c)}<b>${esc(c.name)}</b><span id="callState">${video ? 'Video calling…' : 'Calling…'}</span><button class="end" aria-label="End call">${I.phone}</button>`;
+  el.querySelector('.end').onclick = closeCall;
+  $('#overlay').appendChild(el);
+  let s = 0;
+  el._t = setTimeout(() => { el._i = setInterval(() => { s++; el.querySelector('#callState').textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }, 1000); }, 2500);
+}
+function closeCall(){ const el = $('#call'); if (el){ clearTimeout(el._t); clearInterval(el._i); el.remove(); } }
+
+function sheet(html){
+  closeSheet();
+  const s = document.createElement('div');
+  s.className = 'scrim'; s.id = 'scrim';
+  s.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+  s.addEventListener('click', e => { if (e.target === s) closeSheet(); });
+  $('#overlay').appendChild(s);
+  return s;
+}
+function closeSheet(){ $('#scrim')?.remove(); }
+
+function newChatSheet(){
+  const s = sheet(`<h3>New chat</h3>
+    <input id="newName" type="text" placeholder="Name or number" autocomplete="off" aria-label="Name or number">
+    <button class="primary" id="startBtn" disabled>Start chat</button>`);
+  const name = s.querySelector('#newName'), btn = s.querySelector('#startBtn');
+  name.oninput = () => btn.disabled = !name.value.trim();
+  const start = () => {
+    const n = name.value.trim(); if (!n) return;
+    let c = state.chats.find(x => x.name.toLowerCase() === n.toLowerCase());
+    if (!c) { c = {id:'c'+Date.now(), name:n, unread:0, msgs:[]}; state.chats.push(c); }
+    closeSheet(); openChat(c.id);
+  };
+  btn.onclick = start;
+  name.onkeydown = e => { if (e.key === 'Enter') start(); };
+  setTimeout(() => name.focus(), 200);
+}
+function settingsSheet(){
+  let confirm = false;
+  const s = sheet(`<h3>Settings</h3>
+    <p>All your chats live in one inbox.</p>
+    <button class="ghost-btn" id="resetBtn">Reset demo chats</button>`);
+  s.querySelector('#resetBtn').onclick = e => {
+    if (!confirm) { confirm = true; e.target.textContent = 'Tap again to reset'; return; }
+    state = seed(); save(); renderList(); closeSheet();
+  };
+}
+
+/* ---------- wiring ---------- */
+$('#searchIc').innerHTML = I.search; $('#newBtn').innerHTML = I.plus;
+$('#backBtn').innerHTML = I.back; $('#callBtn').innerHTML = I.phone; $('#videoBtn').innerHTML = I.video;
+$('#emojiBtn').innerHTML = I.smile; $('#photoBtn').innerHTML = I.plus; paintSend();
+const TABS = {messages:[I.chat,'Messages'], contacts:[I.people,'Contacts'], settings:[I.gear,'Settings']};
+document.querySelectorAll('.tabs [data-tab]').forEach(b => b.innerHTML = TABS[b.dataset.tab][0] + TABS[b.dataset.tab][1]);
+$('#emojis').innerHTML = EMOJIS.map(e => `<button type="button">${e}</button>`).join('');
+
+$('#list').onclick = e => { const o = e.target.closest('[data-open]'); if (o) openChat(o.dataset.open); };
+$('.tabs').onclick = e => {
+  const b = e.target.closest('[data-tab]'); if (!b) return;
+  if (b.dataset.tab === 'settings') return settingsSheet();
+  ui.tab = b.dataset.tab; renderList(); $('#list').scrollTop = 0;
+};
+$('#q').oninput = e => { ui.q = e.target.value; renderList(); };
+$('#newBtn').onclick = newChatSheet;
+$('#backBtn').onclick = closeChat;
+$('#callBtn').onclick = () => startCall(false);
+$('#videoBtn').onclick = () => startCall(true);
+$('#photoBtn').onclick = () => send('', true);
+$('#emojiBtn').onclick = () => { $('#emojis').hidden = !$('#emojis').hidden; };
+$('#emojis').onclick = e => { const b = e.target.closest('button'); if (!b) return; const inp = $('#msgInput'); inp.value += b.textContent; paintSend(); inp.focus(); };
+$('#msgInput').oninput = paintSend;
+$('#composer').onsubmit = e => { e.preventDefault(); const inp = $('#msgInput'); if (!inp.value.trim()) return; send(inp.value); inp.value = ''; $('#emojis').hidden = true; paintSend(); };
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if ($('#call')) closeCall(); else if ($('#scrim')) closeSheet(); else if (ui.cur) closeChat();
+});
+
+/* someone writes now and then */
+setInterval(() => {
+  if (document.hidden) return;
+  const pool = state.chats.filter(c => c.id !== ui.cur && !ui.pending[c.id] && c.msgs.length);
+  if (!pool.length) return;
+  const c = pool[Math.floor(Math.random()*pool.length)];
+  const who = c.members ? c.members[Math.floor(Math.random()*c.members.length)] : 'them';
+  receive(c, who, INCOMING[Math.floor(Math.random()*INCOMING.length)]);
+}, 30000);
+setInterval(() => { if (!ui.cur) renderList(); }, 60000);
+
+renderList();
+</script>

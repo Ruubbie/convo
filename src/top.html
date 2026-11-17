@@ -1,0 +1,219 @@
+<title>Huddle Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --ink:#111111; --muted:#6f6c6a; --soft:#e9e6e4; --soft-2:#dedad7; --line:rgba(0,0,0,.06);
+  --phone:#f5f3f2; --dark:#1c1c1c;
+  --font:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;font-family:var(--font);color:var(--ink);overflow:hidden;background:#e6e3e1}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:14px}
+
+.stage{height:100%;display:grid;place-items:center;
+  background:
+    radial-gradient(50% 45% at 8% 30%, rgba(190,182,176,.55), transparent 70%),
+    radial-gradient(60% 50% at 100% 0%, rgba(255,255,255,.9), transparent 70%),
+    linear-gradient(160deg,#ece9e7,#dcd8d5)}
+
+.phone{position:relative;width:min(410px,100vw - 32px);height:min(860px,100% - 48px);
+  border-radius:56px;overflow:hidden;display:flex;flex-direction:column;background:var(--phone);
+  box-shadow:0 50px 80px -40px rgba(60,50,45,.35), 0 0 0 1px rgba(255,255,255,.8), 0 2px 6px rgba(0,0,0,.04)}
+@media (max-width:520px){.phone{width:100%;height:100%;border-radius:0}}
+
+/* status bar + home indicator */
+.status{position:absolute;left:0;right:0;top:0;z-index:8;display:flex;align-items:center;justify-content:space-between;padding:20px 32px 0 40px;font-weight:700;font-size:17px;pointer-events:none}
+.status svg{height:12px;margin-left:5px}
+.home-bar{position:absolute;left:50%;bottom:9px;width:134px;height:5px;border-radius:3px;background:#111;transform:translateX(-50%);z-index:8;pointer-events:none}
+@media (max-width:520px){.status,.home-bar{display:none}}
+
+.round{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--soft)}
+.round:hover{background:var(--soft-2)}
+.round svg{width:22px;height:22px}
+.round.dark{background:var(--dark);color:#fff}
+.round.dark:hover{background:#000}
+
+.head{display:flex;align-items:center;gap:12px;padding:72px 22px 4px 32px}
+@media (max-width:520px){.head{padding-top:24px}}
+h1{flex:1;margin:0;font-size:40px;font-weight:800;letter-spacing:-.035em}
+.search{position:relative;margin:18px 22px 12px}
+.search svg{position:absolute;left:18px;top:50%;width:20px;height:20px;transform:translateY(-50%);color:#222}
+.search input{width:100%;border:0;background:var(--soft);border-radius:999px;padding:14px 18px 14px 50px;font-size:16px;outline:none}
+.search input::placeholder,.composer input::placeholder{color:#8a8785}
+
+.list{flex:1;min-height:0;overflow-y:auto;padding:0 12px 120px;scrollbar-width:none}
+.row{display:flex;align-items:center;gap:16px;width:100%;text-align:left;padding:8px 10px;border-radius:24px}
+.row:hover{background:rgba(0,0,0,.035)}
+.row .mid{flex:1;min-width:0}
+.row .top,.row .bot{display:flex;align-items:center;gap:8px}
+.row .nm{flex:1;min-width:0;font-weight:600;font-size:17.5px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .time{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.row .bot{margin-top:5px;min-height:20px}
+.row .txt{flex:1;min-width:0;font-size:15.5px;color:#4d4a48;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .typing{color:var(--ink);font-style:italic}
+.badge{min-width:20px;height:20px;padding:0 6px;margin-right:2px;border-radius:10px;background:var(--dark);color:#fff;font-size:12px;font-weight:600;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.letter{font-size:13px;font-weight:700;color:var(--muted);padding:14px 12px 4px}
+.empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
+
+.av{flex:none;display:block;width:var(--s,66px);height:var(--s,66px);border-radius:50%;overflow:hidden;background:var(--soft)}
+.av img{display:block;width:100%;height:100%;object-fit:cover}
+.av .ini{width:100%;height:100%;display:grid;place-items:center;background:var(--soft-2);font-weight:600;font-size:calc(var(--s,66px) * .42)}
+.av.grp{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#fff}
+
+/* tab bar */
+.tabs{position:absolute;left:22px;right:22px;bottom:26px;display:flex;padding:8px 6px;border-radius:30px;z-index:4;
+  background:rgba(250,249,248,.92);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  box-shadow:0 8px 30px -10px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.03)}
+@media (max-width:520px){.tabs{bottom:14px}}
+.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;font-size:13px;color:#8a8785}
+.tabs button svg{width:26px;height:26px}
+.tabs button[aria-selected="true"]{color:var(--ink)}
+
+/* chat */
+.chat{position:absolute;inset:0;display:flex;flex-direction:column;z-index:5;background:var(--phone);
+  transform:translateX(100%);visibility:hidden;transition:transform .32s cubic-bezier(.2,.8,.2,1),visibility .32s}
+.chat.open{transform:none;visibility:visible}
+.chat-head{display:flex;align-items:center;gap:12px;padding:68px 18px 14px 14px}
+@media (max-width:520px){.chat-head{padding-top:18px}}
+.chat-head .plain{width:40px;height:48px;display:grid;place-items:center;flex:none}
+.chat-head .plain svg{width:26px;height:26px}
+.chat-head .av{--s:58px}
+.chat-head .info{flex:1;min-width:0}
+.chat-head .nm{font-weight:700;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-head .sub{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.chat-head .round{width:46px;height:46px}
+.msgs{flex:1;min-height:0;overflow-y:auto;padding:6px 16px 16px;display:flex;flex-direction:column;gap:10px;scrollbar-width:none}
+.day{align-self:center;font-size:12px;font-weight:600;color:var(--muted);margin:6px 0 2px}
+.au{font-size:13.5px;color:#4d4a48;margin:10px 0 -4px 62px}
+.line{display:flex;align-items:center;gap:12px}
+.line .av{--s:50px;align-self:flex-start}
+.line .av.ghost{visibility:hidden;height:0}
+.line .t{font-size:12px;color:var(--muted);align-self:flex-end;margin-bottom:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.b{max-width:72%;padding:13px 18px;border-radius:26px;font-size:16.5px;line-height:1.35;overflow-wrap:anywhere;animation:pop .2s ease-out;background:var(--soft)}
+.b.me{align-self:flex-end;background:var(--dark);color:#fff;display:flex;align-items:baseline;gap:12px;padding:14px 18px}
+.b .meta{font-size:12px;color:rgba(255,255,255,.75);white-space:nowrap;font-variant-numeric:tabular-nums}
+.b .meta svg{width:14px;height:10px;margin-left:4px;vertical-align:-1px}
+.b.big{font-size:40px;background:none;padding:0 2px}
+.b.big.me{color:var(--ink)}
+.b.big .meta{display:none}
+.pic{position:relative;max-width:78%;border-radius:22px;overflow:hidden;animation:pop .2s ease-out}
+.pic img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover}
+.pic .meta{position:absolute;right:14px;bottom:10px;font-size:13px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pic.me{align-self:flex-end}
+.react{display:inline-flex;align-items:center;gap:8px;margin:-4px 0 0 62px;padding:6px 14px;border-radius:999px;background:var(--soft);font-size:14px;align-self:flex-start}
+.react.me{align-self:flex-end;margin-left:0}
+.typing-b{display:flex;gap:4px;padding:16px 18px}
+.typing-b i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:blink 1s infinite}
+.typing-b i:nth-child(2){animation-delay:.15s}.typing-b i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+@keyframes pop{from{transform:scale(.96);opacity:.4}}
+.emojis{display:flex;justify-content:space-between;margin:0 16px;padding:8px 12px;border-radius:999px;background:#fff;box-shadow:0 0 0 1px var(--line)}
+.emojis button{font-size:22px;padding:2px 4px}
+.composer{display:flex;align-items:center;gap:10px;padding:12px 18px calc(36px + env(safe-area-inset-bottom,0px))}
+@media (max-width:520px){.composer{padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}}
+.composer .round{width:52px;height:52px}
+.composer .field{flex:1;min-width:0;display:flex;align-items:center;background:#faf9f8;border-radius:999px;padding:0 8px 0 20px;box-shadow:0 2px 10px -4px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.03)}
+.composer input{flex:1;min-width:0;border:0;background:none;padding:15px 0;font-size:16px;outline:none}
+.composer .field button{width:38px;height:38px;display:grid;place-items:center;color:var(--ink)}
+.composer .field svg{width:28px;height:28px}
+
+/* sheet, call, toast */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.25);z-index:20;display:flex;align-items:flex-end;animation:fade .2s}
+@keyframes fade{from{opacity:0}}
+.sheet{width:100%;padding:26px 24px calc(40px + env(safe-area-inset-bottom,0px));border-radius:34px 34px 0 0;background:var(--phone);animation:up .25s cubic-bezier(.2,.8,.2,1)}
+@keyframes up{from{transform:translateY(100%)}}
+.sheet h3{margin:0 0 16px;font-size:24px;font-weight:800;letter-spacing:-.02em}
+.sheet p{margin:0;color:var(--muted);font-size:15px;line-height:1.5}
+.sheet input{width:100%;border:0;background:var(--soft);border-radius:999px;padding:14px 20px;font-size:16px;outline:none}
+.primary{width:100%;padding:15px;border-radius:999px;background:var(--dark);color:#fff;font-weight:600;margin-top:18px}
+.primary:disabled{opacity:.35;cursor:default}
+.ghost-btn{width:100%;padding:15px;border-radius:999px;background:var(--soft);font-weight:600;margin-top:20px}
+.call{position:absolute;inset:0;z-index:25;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--phone);animation:fade .25s}
+.call .av{--s:132px;margin-bottom:14px}
+.call b{font-size:28px;font-weight:800;letter-spacing:-.02em}
+.call span{color:var(--muted);font-size:16px;font-variant-numeric:tabular-nums}
+.call .end{margin-top:56px;width:72px;height:72px;border-radius:50%;background:#e5484d;color:#fff;display:grid;place-items:center}
+.call .end svg{width:30px;height:30px;transform:rotate(135deg)}
+.toast{position:absolute;left:12px;right:12px;top:54px;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:26px;text-align:left;
+  background:rgba(255,255,255,.95);box-shadow:0 14px 40px -12px rgba(0,0,0,.25), 0 0 0 1px var(--line);animation:drop .3s cubic-bezier(.2,.8,.2,1)}
+@media (max-width:520px){.toast{top:12px}}
+@keyframes drop{from{transform:translateY(-160%)}}
+.toast .av{--s:42px}
+.toast .mid{flex:1;min-width:0}
+.toast b{display:block;font-size:15px}
+.toast span{display:block;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<div class="stage">
+  <div class="phone">
+    <div class="status" aria-hidden="true"><span>9:41</span><span>
+      <svg viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+      <svg viewBox="0 0 17 12" fill="currentColor"><path d="M8.5 2.6c2.4 0 4.6.9 6.3 2.5l1.3-1.3A10.8 10.8 0 0 0 .9 3.8l1.3 1.3a9 9 0 0 1 6.3-2.5zm0 3.6c1.4 0 2.7.5 3.7 1.4L13.5 6.3a7.2 7.2 0 0 0-10 0l1.3 1.3c1-.9 2.3-1.4 3.7-1.4zM8.5 12l2.4-2.4a3.4 3.4 0 0 0-4.8 0z"/></svg>
+      <svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="20" height="8" rx="2" fill="currentColor"/><path d="M25 4v4a2 2 0 0 0 0-4z" fill="currentColor" opacity=".4"/></svg>
+    </span></div>
+    <div class="home-bar" aria-hidden="true"></div>
+
+    <header class="head">
+      <h1 id="title">Messages</h1>
+      <button class="round" id="newBtn" aria-label="New chat"></button>
+    </header>
+    <label class="search"><span id="searchIc"></span><input id="q" type="text" placeholder="Search conversations..." autocomplete="off" aria-label="Search conversations"></label>
+    <div class="list" id="list"></div>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="messages" aria-selected="true"></button>
+      <button role="tab" data-tab="contacts" aria-selected="false"></button>
+      <button role="tab" data-tab="settings" aria-selected="false"></button>
+    </nav>
+
+    <section class="chat" id="chat" aria-hidden="true">
+      <header class="chat-head">
+        <button class="plain" id="backBtn" aria-label="Back"></button>
+        <span id="chatAv"></span>
+        <div class="info"><div class="nm" id="chatName"></div><div class="sub" id="chatSub"></div></div>
+        <button class="round" id="callBtn" aria-label="Call"></button>
+        <button class="round" id="videoBtn" aria-label="Video call"></button>
+      </header>
+      <div class="msgs" id="msgs"></div>
+      <div class="emojis" id="emojis" hidden></div>
+      <form class="composer" id="composer">
+        <button type="button" class="round" id="photoBtn" aria-label="Send a photo"></button>
+        <div class="field">
+          <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" aria-label="Message">
+          <button type="button" id="emojiBtn" aria-label="Emoji"></button>
+        </div>
+        <button type="submit" class="round dark" id="sendBtn" aria-label="Send"></button>
+      </form>
+    </section>
+
+    <div id="overlay"></div>
+  </div>
+</div>
+
+<script>
+const I = {
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  send:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  mic:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  smile:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".9" fill="currentColor"/><circle cx="15" cy="10" r=".9" fill="currentColor"/></svg>',
+  phone:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15.2 15.2 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg>',
+  video:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="6" width="14" height="12" rx="3"/><path d="M17 10.5 22 7v10l-5-3.5z"/></svg>',
+  chat:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.5 3 2 6.6 2 11c0 2.4 1.3 4.6 3.4 6.1L4.5 21l4.3-2.4c1 .3 2.1.4 3.2.4 5.5 0 10-3.6 10-8s-4.5-8-10-8z"/></svg>',
+  people:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.8"/><path d="M2 19c0-3.6 3.1-6 7-6s7 2.4 7 6v1H2zM17 13c3 0 5 1.9 5 4.7V19h-4.5c0-2.3-.9-4.3-2.4-5.6.6-.3 1.2-.4 1.9-.4z"/></svg>',
+  ticks:'<svg viewBox="0 0 16 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5l2.8 3 5.7-7M7.6 8.3 14.5 1.5"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.7 2l.5 2.6c.7.2 1.3.6 1.9 1l2.5-.9 1.7 3-2 1.7c.1.7.1 1.4 0 2.2l2 1.7-1.7 3-2.5-.9c-.6.4-1.2.8-1.9 1l-.5 2.6h-3.4l-.5-2.6c-.7-.2-1.3-.6-1.9-1l-2.5.9-1.7-3 2-1.7a7 7 0 0 1 0-2.2l-2-1.7 1.7-3 2.5.9c.6-.4 1.2-.8 1.9-1L10.3 2zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
+};
+const REPLIES = ['Haha yes 😄','Sounds good to me','On it!','Wait, really?','Let me check and get back to you','👍','Sure, what time works for you?','Nice one','Ok!','In a meeting, call you after?','Love it ❤️','Deal','Can\'t wait'];
+const INCOMING = ['Are you free tonight?','Sent you the file','Call me when you can','🎉','Running 5 min late','Did you see this?','Thanks again for yesterday','Lunch tomorrow?','Who\'s bringing snacks?','Just landed ✈️'];
+const EMOJIS = ['😂','😊','😍','👍','🙏','🔥','🎉','❤️'];
+const KEY = 'huddle-inbox-v4';
+
