@@ -54,7 +54,10 @@ Don't expose port 8080 on the internet without HTTPS. The token would travel in 
 
 ## 2. Build the iPhone app
 
-You need a Mac with Xcode 16 or newer.
+**Without a Mac (sideload):** every push to `main` builds an unsigned `Convo.ipa` on GitHub Actions and publishes it as the
+[`latest` release](../../releases/tag/latest). Install it with AltStore, SideStore or Sideloadly, which sign it with your Apple ID.
+
+**With a Mac:** you need Xcode 16 or newer.
 
 1. Open `ios/Convo.xcodeproj`.
 2. Select the **Convo** target. Under *Signing & Capabilities*, pick your team and change the bundle identifier

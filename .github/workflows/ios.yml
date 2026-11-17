@@ -5,6 +5,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-15
@@ -35,6 +38,28 @@ jobs:
           xcodebuild -project ios/Convo.xcodeproj -target Convo -configuration Debug -sdk iphonesimulator \
             SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO build | tail -n 40
           test -d build/Debug-iphonesimulator/Convo.app
+
+      # Unsigned IPA for sideloading (AltStore, SideStore, Sideloadly sign it with your own Apple ID).
+      - name: Build the IPA
+        run: |
+          xcodebuild -project ios/Convo.xcodeproj -target Convo -configuration Release -sdk iphoneos \
+            SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO build | tail -n 20
+          mkdir -p ipa/Payload
+          cp -R build/Release-iphoneos/Convo.app ipa/Payload/
+          (cd ipa && zip -qr ../Convo.ipa Payload)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Convo-ipa
+          path: Convo.ipa
+
+      - name: Publish the IPA as the "latest" release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Convo.ipa --title "Latest build" --notes "Unsigned IPA from ${GITHUB_SHA::7}. Sideload with AltStore, SideStore or Sideloadly." --target "$GITHUB_SHA"
 
       - name: Boot a simulator
         run: |
