@@ -74,7 +74,6 @@ struct Avatar: View {
     @Environment(AppModel.self) private var model
     let chat: Chat
     var size: CGFloat = 66
-    var badge = true
     @State private var image: UIImage?
 
     var body: some View {
@@ -87,14 +86,6 @@ struct Avatar: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(alignment: .bottomTrailing) {
-            if badge {
-                Circle().fill(chat.network.color)
-                    .frame(width: size * 0.26, height: size * 0.26)
-                    .overlay(Circle().stroke(Color.bg, lineWidth: 2.5))
-                    .accessibilityLabel(chat.network.title)
-            }
-        }
         .task(id: chat.id) { image = await model.image("/api/chats/\(Bridge.escape(chat.id))/avatar") }
     }
 }

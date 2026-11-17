@@ -54,7 +54,7 @@ struct ChatView: View {
             ToolbarItem(placement: .principal) {
                 if let chat {
                     HStack(spacing: 10) {
-                        Avatar(chat: chat, size: 36, badge: false)
+                        Avatar(chat: chat, size: 36)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(chat.name).font(.system(size: 17, weight: .bold)).lineLimit(1)
                             Text(chat.isGroup ? "\(chat.network.title) group" : chat.network.title)

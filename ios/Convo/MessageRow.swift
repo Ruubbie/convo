@@ -26,7 +26,7 @@ struct MessageRow: View {
                 }
                 HStack(alignment: .bottom, spacing: 10) {
                     Group {
-                        if chat.isGroup { Initials(name: message.sender, size: 36) } else { Avatar(chat: chat, size: 36, badge: false) }
+                        if chat.isGroup { Initials(name: message.sender, size: 36) } else { Avatar(chat: chat, size: 36) }
                     }
                     .opacity(firstOfRun ? 1 : 0)
                     bubbleWithReactions

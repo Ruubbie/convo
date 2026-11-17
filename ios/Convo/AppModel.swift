@@ -141,7 +141,7 @@ final class AppModel {
 
     /// People show with the name from the iPhone's contacts when they're in there.
     private func named(_ chat: Chat) -> Chat {
-        guard !chat.isGroup, let key = chat.phone.flatMap(AddressBook.key), let name = contactNames[key] else { return chat }
+        guard !chat.isGroup, let key = chat.number.flatMap(AddressBook.key), let name = contactNames[key] else { return chat }
         var chat = chat
         chat.name = name
         return chat

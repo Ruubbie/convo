@@ -74,7 +74,7 @@ struct ToastView: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 12) {
-                Avatar(chat: toast.chat, size: 42, badge: false)
+                Avatar(chat: toast.chat, size: 42)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(toast.chat.isGroup ? "\(toast.message.sender) · \(toast.chat.name)" : toast.chat.name)
                         .font(.system(size: 15, weight: .semibold)).lineLimit(1)

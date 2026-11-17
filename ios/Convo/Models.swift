@@ -19,6 +19,15 @@ struct Chat: Codable, Identifiable, Hashable {
     var lastSender: String
     var lastFromMe: Bool
 
+    /// `phone`, or for bridges that don't send it, the number in the id ("wa:<digits>@s.whatsapp.net", "sg:+<digits>").
+    var number: String? {
+        if let phone { return phone }
+        let address = id.dropFirst(3)
+        if id.hasPrefix("wa:"), address.hasSuffix("@s.whatsapp.net") { return String(address.prefix { $0 != "@" }) }
+        if id.hasPrefix("sg:"), address.hasPrefix("+") { return String(address) }
+        return nil
+    }
+
     var lastDate: Date? { lastTs > 0 ? Date(timeIntervalSince1970: lastTs / 1000) : nil }
     var preview: String {
         if lastFromMe { return "You: " + lastText }
