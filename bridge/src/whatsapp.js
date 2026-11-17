@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import pino from 'pino'
 import makeWASocket, {
-  Browsers, DisconnectReason, downloadMediaMessage, normalizeMessageContent, useMultiFileAuthState,
+  Browsers, DisconnectReason, downloadMediaMessage, fetchLatestWaWebVersion, normalizeMessageContent, useMultiFileAuthState,
 } from 'baileys'
 import * as store from './store.js'
 
@@ -26,8 +26,11 @@ const toNumber = t => (typeof t === 'number' ? t : t?.toNumber ? t.toNumber() : 
 
 export async function start() {
   const { state: auth, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
+  // WhatsApp rejects linking ("Couldn't link device") from an outdated web client version,
+  // so ask for the current one instead of relying on the version baked into Baileys.
+  const { version } = await fetchLatestWaWebVersion()
   const s = sock = makeWASocket({
-    auth, logger, browser: Browsers.macOS('Desktop'), markOnlineOnConnect: false, syncFullHistory: false,
+    version, auth, logger, browser: Browsers.macOS('Desktop'), markOnlineOnConnect: false, syncFullHistory: false,
   })
 
   s.ev.on('creds.update', saveCreds)
