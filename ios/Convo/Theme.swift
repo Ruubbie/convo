@@ -14,6 +14,18 @@ extension Color {
     static let ink = Color(light: 0x111111, dark: 0xF2F0EF)
     static let mine = Color(light: 0x1C1C1C, dark: 0xF2F0EF)
     static let mineText = Color(light: 0xFFFFFF, dark: 0x111111)
+
+    /// Group members' names get one of these, always the same for the same person.
+    private static let names: [Color] = [
+        Color(light: 0xD43F4F, dark: 0xFF7A85), Color(light: 0x1E88C7, dark: 0x5CC2F2),
+        Color(light: 0x109A84, dark: 0x3ED3B5), Color(light: 0xC9730E, dark: 0xF6AD4E),
+        Color(light: 0x7E57D6, dark: 0xB792F7), Color(light: 0x3E9A2A, dark: 0x7DD15C),
+        Color(light: 0xC2408F, dark: 0xF08BCB),
+    ]
+    static func forName(_ key: String) -> Color {
+        // String.hashValue changes every launch, so sum the characters instead.
+        names[key.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFFFF } % names.count]
+    }
 }
 
 extension UIColor {
@@ -133,7 +145,7 @@ struct PhotoThumbnail: View {
             }
         }
         .frame(width: 250, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         .task(id: path) {
             image = await model.image(path)
             failed = image == nil

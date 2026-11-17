@@ -18,7 +18,7 @@ struct ChatView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 10) {
+                    LazyVStack(spacing: 3) {
                         if model.hasEarlier.contains(chatId) {
                             Button("Load earlier messages") { Task { await model.loadMessages(chatId, earlier: true) } }
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Color.muted).padding(.vertical, 6)
@@ -26,17 +26,20 @@ struct ChatView: View {
                         if let chat {
                             ForEach(Array(messages.enumerated()), id: \.element.id) { i, message in
                                 let previous = i > 0 ? messages[i - 1] : nil
-                                if previous.map({ !Calendar.current.isDate($0.date, inSameDayAs: message.date) }) ?? true {
+                                let next = i + 1 < messages.count ? messages[i + 1] : nil
+                                let newDay = previous.map { !Calendar.current.isDate($0.date, inSameDayAs: message.date) } ?? true
+                                if newDay {
                                     Text(When.day(message.date)).font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(Color.muted).padding(.top, 6)
                                 }
                                 MessageRow(message: message, chat: chat,
-                                           firstOfRun: previous?.fromMe != message.fromMe || previous?.sender != message.sender)
+                                           firstOfRun: newDay || !sameRun(previous, message),
+                                           lastOfRun: !sameRun(message, next))
                                     .id(message.id)
                             }
                         }
                     }
-                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
                 }
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
@@ -104,6 +107,12 @@ struct ChatView: View {
             .disabled(text.trimmed.isEmpty || sending)
         }
         .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8)
+    }
+
+    /// Messages run together when the same person sent them on the same day.
+    private func sameRun(_ a: Message?, _ b: Message?) -> Bool {
+        guard let a, let b else { return false }
+        return a.fromMe == b.fromMe && a.sender == b.sender && Calendar.current.isDate(a.date, inSameDayAs: b.date)
     }
 
     private func sendText() async {

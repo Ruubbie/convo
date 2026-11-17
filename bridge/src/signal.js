@@ -89,17 +89,21 @@ async function handle(data) {
   })
   const message = {
     id: `${id}/${dm.timestamp}/${sender}`, chatId: id, fromMe: !!sent,
-    sender: sent ? '' : env.sourceName || sender, text, ts: dm.timestamp || env.timestamp || Date.now(), media: null,
+    sender: sent ? '' : env.sourceName || sender, senderId: sent ? '' : 'sg:' + sender, text, ts: dm.timestamp || env.timestamp || Date.now(), media: null,
   }
   if (image) {
-    try {
-      const res = await fetch(`${API}/v1/attachments/${enc(image.id)}`)
-      if (res.ok) {
-        store.saveMedia(message.id, Buffer.from(await res.arrayBuffer()))
-        message.media = image.contentType
+    // signal-cli may still be writing the file when the message arrives, so try a few times.
+    for (let attempt = 0; attempt < 5 && !message.media; attempt++) {
+      if (attempt) await sleep(1000)
+      try {
+        const res = await fetch(`${API}/v1/attachments/${enc(image.id)}`)
+        if (res.ok) {
+          store.saveMedia(message.id, Buffer.from(await res.arrayBuffer()))
+          message.media = image.contentType
+        }
+      } catch (e) {
+        console.warn('signal attachment:', e.message)
       }
-    } catch (e) {
-      console.warn('signal attachment:', e.message)
     }
     if (!message.media && !message.text) message.text = '📷 Photo'
   }

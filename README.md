@@ -116,7 +116,7 @@ Every request needs the header `Authorization: Bearer <BRIDGE_TOKEN>`.
 | `POST /api/messages/:id/react` `{emoji}` | React; an empty `emoji` removes your reaction |
 | `POST /api/messages/:id/vote` `{options}` | Vote with the option names you pick; `[]` takes your vote back |
 | `POST /api/chats/:id/read` | Mark as read |
-| `GET /api/chats/:id/avatar`, `GET /api/media/:messageId` | Images (older WhatsApp photos are downloaded on first request) |
+| `GET /api/chats/:id/avatar`, `GET /api/people/:senderId/avatar`, `GET /api/media/:messageId` | Images (older WhatsApp photos are downloaded on first request) |
 | `WS /api/events` | Live events: `message`, `update` (reactions, votes), `chat`, `status`, `reload` |
 
 Ids are URL-encoded as one path segment.

@@ -62,6 +62,11 @@ async function route(req, res) {
     }
     return msg?.media && fs.existsSync(store.mediaPath(b)) ? file(res, store.mediaPath(b), msg.media) : json(res, 404, { error: 'No media' })
   }
+  // A group member's picture, by the senderId on their messages.
+  if (is('GET', 'people', b, 'avatar')) {
+    const path = await networks[b.startsWith('wa:') ? 'whatsapp' : 'signal'].avatar({ id: b })
+    return path ? file(res, path, 'image/jpeg') : json(res, 404, { error: 'No avatar' })
+  }
   if (a === 'messages' && b && req.method === 'POST') {
     const msg = store.getMessage(b)
     if (!msg) return json(res, 404, { error: 'Not found' })

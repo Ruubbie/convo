@@ -157,7 +157,7 @@ async function handle(msg, { live = true, imageBuffer = null } = {}) {
 
   const message = {
     id: `${id}/${key.id}`, chatId: id, fromMe: !!key.fromMe,
-    sender: key.fromMe ? '' : msg.pushName || '', text,
+    sender: key.fromMe ? '' : msg.pushName || '', senderId: key.fromMe || !authorOf(key) ? '' : chatId(authorOf(key)), text,
     ts: toNumber(msg.messageTimestamp) * 1000 || Date.now(),
     media: image || null, poll, ref: makeRef(msg, image || poll),
   }

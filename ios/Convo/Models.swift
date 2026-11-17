@@ -41,6 +41,8 @@ struct Message: Codable, Identifiable, Hashable {
     let chatId: String
     let fromMe: Bool
     let sender: String
+    /// "wa:<jid>" or "sg:<number|uuid>"; empty for my own messages and ones stored before bridges sent it.
+    let senderId: String?
     let text: String
     let ts: Double
     let media: String?

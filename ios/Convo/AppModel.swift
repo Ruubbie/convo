@@ -21,7 +21,8 @@ final class AppModel {
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private let images = NSCache<NSString, UIImage>()
-    @ObservationIgnored private var missingImages: Set<String> = []
+    /// Images the bridge didn't have, and when we last asked; asked again after a minute.
+    @ObservationIgnored private var missingImages: [String: Date] = [:]
     /// Phone number key → name, from the iPhone's contacts (see AddressBook).
     @ObservationIgnored private var contactNames: [String: String] = [:]
 
@@ -38,7 +39,7 @@ final class AppModel {
         UserDefaults.standard.set(self.server, forKey: "server")
         Keychain.save("token", self.token)
         chats = []; messages = [:]; status = nil; messagesPath = []
-        images.removeAllObjects(); missingImages = []
+        images.removeAllObjects(); missingImages = [:]
         connect()
     }
 
@@ -147,6 +148,16 @@ final class AppModel {
         return chat
     }
 
+    /// A group member's name from the iPhone's contacts when they're in there, else the name they set.
+    func senderName(_ message: Message) -> String {
+        let id = message.senderId ?? ""
+        let address = id.dropFirst(3)
+        let phone = id.hasPrefix("wa:") && address.hasSuffix("@s.whatsapp.net") ? String(address.prefix { $0 != "@" })
+            : id.hasPrefix("sg:+") ? String(address) : nil
+        if let key = phone.flatMap(AddressBook.key), let name = contactNames[key] { return name }
+        return message.sender
+    }
+
     // MARK: Chats
 
     func loadMessages(_ chatId: String, earlier: Bool = false) async {
@@ -248,11 +259,12 @@ final class AppModel {
 
     func image(_ path: String) async -> UIImage? {
         if let cached = images.object(forKey: path as NSString) { return cached }
-        guard let bridge, !missingImages.contains(path) else { return nil }
+        guard let bridge, Date.now.timeIntervalSince(missingImages[path] ?? .distantPast) > 60 else { return nil }
         guard let data = try? await bridge.data(path), let image = UIImage(data: data) else {
-            missingImages.insert(path)
+            missingImages[path] = .now
             return nil
         }
+        missingImages[path] = nil
         images.setObject(image, forKey: path as NSString)
         return image
     }

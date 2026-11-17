@@ -33,7 +33,8 @@ db.exec(`
 `)
 // Columns added after the first release. poll: {question, options, multi}. ref: network data needed to
 // react, vote or download media later; it stays on the bridge. phone: "+<digits>" when the id doesn't show it.
-for (const [table, column] of [['messages', 'poll'], ['messages', 'ref'], ['chats', 'phone']]) {
+// sender_id: "wa:<jid>" or "sg:<number|uuid>" of who sent a message, for their picture and contact name.
+for (const [table, column] of [['messages', 'poll'], ['messages', 'ref'], ['messages', 'sender_id'], ['chats', 'phone']]) {
   if (!db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
   }
@@ -59,7 +60,7 @@ const toChat = r => r && ({
 function toMessage(r) {
   if (!r) return r
   const message = {
-    id: r.id, chatId: r.chat_id, fromMe: !!r.from_me, sender: r.sender, text: r.text, ts: r.ts, media: r.media,
+    id: r.id, chatId: r.chat_id, fromMe: !!r.from_me, sender: r.sender, senderId: r.sender_id || '', text: r.text, ts: r.ts, media: r.media,
     reactions: db.prepare('SELECT sender, emoji FROM reactions WHERE message_id = ?').all(r.id)
       .map(x => ({ emoji: x.emoji, fromMe: x.sender === ME })),
     poll: null,
@@ -118,9 +119,9 @@ export function markRead(id) {
 
 // live = a new message (counts as unread, pushed to clients). History imports pass live: false.
 export function addMessage(m, { live = true } = {}) {
-  const inserted = db.prepare(`INSERT OR IGNORE INTO messages (id, chat_id, from_me, sender, text, ts, media, poll, ref)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(m.id, m.chatId, m.fromMe ? 1 : 0, m.sender || '', m.text || '', m.ts,
-    m.media || null, m.poll ? JSON.stringify(m.poll) : null, m.ref || null).changes
+  const inserted = db.prepare(`INSERT OR IGNORE INTO messages (id, chat_id, from_me, sender, text, ts, media, poll, ref, sender_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(m.id, m.chatId, m.fromMe ? 1 : 0, m.sender || '', m.text || '', m.ts,
+    m.media || null, m.poll ? JSON.stringify(m.poll) : null, m.ref || null, m.senderId || null).changes
   if (!inserted) return null
   const last = m.text || (m.poll ? '📊 ' + m.poll.question : m.media ? '📷 Photo' : '')
   db.prepare(`UPDATE chats SET last_ts = ?, last_text = ?, last_sender = ?, last_from_me = ? WHERE id = ? AND last_ts <= ?`)
